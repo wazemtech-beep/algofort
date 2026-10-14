@@ -49,6 +49,6 @@ The HTTP suite starts a local production server on port 3111 with the same manag
 
 ## Deployment
 
-Deploy `algofort` as its own Vercel project with Root Directory `algofort`, Framework Next.js, install `npm ci`, build `npm run build`, Node 24.x and Fluid compute enabled. Add private DATABASE_URL, DIRECT_URL, SESSION_SECRET, CREDENTIAL_ENCRYPTION_KEY, optional DATABASE_CA_CERT and HTTPS APP_URL. Preserve the encryption key/DB and use a runtime pooler when the plan supports one. Existing schema is already applied; the build generates the client but does not mutate the database. No cron is required for these manually recorded office workflows. Provider backups must be configured separately.
+Deploy `algofort` as its own Vercel project with Root Directory `.` for the standalone algofort repository (use `algofort` only for the gym monorepo), Framework Next.js, install `npm ci`, build `npm run build`, Node 24.x and Fluid compute enabled. Add private DATABASE_URL, DIRECT_URL, SESSION_SECRET, CREDENTIAL_ENCRYPTION_KEY, optional DATABASE_CA_CERT and HTTPS APP_URL. Preserve the encryption key/DB and use a runtime pooler when the plan supports one. Existing schema is already applied; the build generates the client but does not mutate the database. No cron is required for these manually recorded office workflows. Provider backups must be configured separately.
 
 Local build/API checks are not certification of a cloud deployment, exhaustive browser accessibility or every possible financial case. No Algofort cloud deployment/store application was created.
