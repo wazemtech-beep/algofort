@@ -1,0 +1,138 @@
+generator client {
+  provider = "prisma-client-js"
+  output = "../src/generated/prisma"
+}
+datasource db {
+  provider = "postgresql"
+  url = env("DATABASE_URL")
+  directUrl = env("DIRECT_URL")
+}
+model Owner {
+  id String @id @default(cuid())
+  email String @unique
+  passwordHash String
+  name String
+  sessions Session[]
+  failedAttempts Int @default(0)
+  lockedUntil DateTime?
+}
+model Session {
+  id String @id @default(cuid())
+  tokenHash String @unique
+  ownerId String
+  owner Owner @relation(fields: [ownerId], references: [id], onDelete: Cascade)
+  expiresAt DateTime
+  @@index([expiresAt])
+}
+model Client {
+  id String @id @default(cuid())
+  name String
+  email String?
+  phone String?
+  company String?
+  notes String?
+  projects Project[]
+  createdAt DateTime @default(now())
+  @@index([name])
+}
+enum ProjectStatus {
+  PLANNED
+  ACTIVE
+  ON_HOLD
+  COMPLETED
+  CANCELLED
+}
+model Project {
+  id String @id @default(cuid())
+  name String
+  clientId String
+  client Client @relation(fields: [clientId], references: [id])
+  agreedAmount Decimal @db.Decimal(18, 2)
+  currency String @default("PKR")
+  deadline DateTime?
+  source String @default("DIRECT")
+  status ProjectStatus @default(ACTIVE)
+  notes String?
+  payments Payment[]
+  access Credential[]
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  @@index([status, deadline])
+  @@index([clientId])
+}
+model Payment {
+  id String @id @default(cuid())
+  projectId String
+  project Project @relation(fields: [projectId], references: [id])
+  amount Decimal @db.Decimal(18, 2)
+  platformFee Decimal @default(0) @db.Decimal(18, 2)
+  paidAt DateTime
+  method String
+  reference String?
+  idempotencyKey String @unique
+  voidedAt DateTime?
+  voidReason String?
+  createdAt DateTime @default(now())
+  @@index([projectId, paidAt])
+  @@index([paidAt])
+}
+model Credential {
+  id String @id @default(cuid())
+  projectId String
+  project Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  label String
+  url String?
+  username String?
+  encryptedSecret String
+  createdAt DateTime @default(now())
+  @@index([projectId])
+}
+model Employee {
+  id String @id @default(cuid())
+  name String
+  role String
+  monthlySalary Decimal @db.Decimal(18, 2)
+  currency String @default("PKR")
+  active Boolean @default(true)
+  salaryEntries SalaryEntry[]
+}
+model SalaryEntry {
+  id String @id @default(cuid())
+  employeeId String
+  employee Employee @relation(fields: [employeeId], references: [id])
+  month String
+  agreedSalary Decimal @db.Decimal(18, 2)
+  payments SalaryPayment[]
+  @@unique([employeeId, month])
+}
+model SalaryPayment {
+  id String @id @default(cuid())
+  salaryEntryId String
+  salaryEntry SalaryEntry @relation(fields: [salaryEntryId], references: [id])
+  amount Decimal @db.Decimal(18, 2)
+  isAdvance Boolean @default(false)
+  paidAt DateTime
+  reference String?
+  idempotencyKey String @unique @default(cuid())
+  @@index([salaryEntryId])
+}
+model Expense {
+  id String @id @default(cuid())
+  description String
+  category String
+  amount Decimal @db.Decimal(18, 2)
+  currency String @default("PKR")
+  spentAt DateTime
+  notes String?
+  voidedAt DateTime?
+  voidReason String?
+  @@index([spentAt, category])
+}
+model AuditEntry {
+  id String @id @default(cuid())
+  action String
+  entityId String
+  actorId String
+  createdAt DateTime @default(now())
+  @@index([entityId, createdAt])
+}
