@@ -1,0 +1,1 @@
+a.nav-item{display:flex;align-items:center;gap:9px;text-decoration:none;font-size:14px}a.client-name{display:inline-block;text-decoration:none;margin-left:0;padding:4px 0}a.client-name:hover{text-decoration:underline}a.secondary{text-decoration:none;display:inline-flex}@media(max-width:700px){a.nav-item{font-size:12px}}

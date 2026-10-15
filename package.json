@@ -1,7 +1,40 @@
 {
-  "name": "algofort", "version": "0.1.0", "private": true,
-  "engines": { "node": "24.x" },
-  "scripts": { "dev": "next dev -p 3100", "build": "prisma generate && next build", "start": "next start -p 3100", "typecheck": "tsc --noEmit", "db:generate": "prisma generate", "db:migrate": "prisma migrate dev", "setup:owner": "node scripts/setup-owner.cjs", "verify": "node scripts/verify-system.cjs" },
-  "dependencies": { "next": "16.3.8", "react": "19.2.8", "react-dom": "19.2.8", "lucide-react": "1.52.0", "@prisma/client": "6.19.3", "@prisma/adapter-pg": "6.19.3", "pg": "8.23.1", "@vercel/functions": "3.9.11" },
-  "devDependencies": { "typescript": "^5", "@types/node": "^20", "@types/react": "^19", "@types/react-dom": "^19", "@types/pg": "^8.23.1", "prisma": "6.19.3" }
+  "name": "algofort",
+  "version": "0.1.0",
+  "private": true,
+  "engines": {
+    "node": "24.x"
+  },
+  "scripts": {
+    "dev": "next dev -p 3100",
+    "build": "prisma generate && next build",
+    "start": "next start -p 3100",
+    "typecheck": "tsc --noEmit",
+    "db:generate": "prisma generate",
+    "db:migrate": "prisma migrate dev",
+    "setup:owner": "node scripts/setup-owner.cjs",
+    "verify": "node scripts/verify-system.cjs",
+    "db:upgrade": "node scripts/upgrade-schema.cjs"
+  },
+  "dependencies": {
+    "@fontsource/manrope": "^5.3.0",
+    "@prisma/adapter-pg": "6.19.3",
+    "@prisma/client": "6.19.3",
+    "@vercel/functions": "3.9.11",
+    "lucide-react": "1.52.0",
+    "next": "16.3.8",
+    "pdfkit": "^0.20.2",
+    "pg": "8.23.1",
+    "react": "19.2.8",
+    "react-dom": "19.2.8"
+  },
+  "devDependencies": {
+    "@types/node": "^20",
+    "@types/pdfkit": "^0.17.6",
+    "@types/pg": "^8.23.1",
+    "@types/react": "^19",
+    "@types/react-dom": "^19",
+    "prisma": "6.19.3",
+    "typescript": "^5"
+  }
 }

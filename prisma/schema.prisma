@@ -30,6 +30,7 @@ model Client {
   email String?
   phone String?
   company String?
+  website String?
   notes String?
   projects Project[]
   createdAt DateTime @default(now())
@@ -53,6 +54,9 @@ model Project {
   source String @default("DIRECT")
   status ProjectStatus @default(ACTIVE)
   notes String?
+  website String?
+  closedAt DateTime?
+  completedAt DateTime?
   payments Payment[]
   access Credential[]
   createdAt DateTime @default(now())
@@ -83,9 +87,16 @@ model Credential {
   label String
   url String?
   username String?
+  email String?
+  category String @default("OTHER")
+  hostingCompanyId String?
+  host String?
+  port Int?
+  loginUrl String?
   encryptedSecret String
   createdAt DateTime @default(now())
   @@index([projectId])
+  @@index([category, hostingCompanyId])
 }
 model Employee {
   id String @id @default(cuid())
@@ -94,6 +105,22 @@ model Employee {
   monthlySalary Decimal @db.Decimal(18, 2)
   currency String @default("PKR")
   active Boolean @default(true)
+  email String?
+  phone String?
+  address String?
+  fatherName String?
+  cnic String?
+  cnicAttachmentId String?
+  joiningDate DateTime?
+  referral String?
+  employmentType String @default("PERMANENT")
+  contractStart DateTime?
+  contractEnd DateTime?
+  probationEnd DateTime?
+  bankId String?
+  accountTitle String?
+  accountNumber String?
+  iban String?
   salaryEntries SalaryEntry[]
 }
 model SalaryEntry {
@@ -135,4 +162,31 @@ model AuditEntry {
   actorId String
   createdAt DateTime @default(now())
   @@index([entityId, createdAt])
+}
+
+model DirectoryEntry {
+  id String @id @default(cuid())
+  kind String
+  name String
+  url String?
+  createdAt DateTime @default(now())
+  @@unique([kind, name])
+}
+model PrivateFile {
+  id String @id @default(cuid())
+  ownerId String
+  name String
+  mime String
+  encryptedData String
+  size Int
+  createdAt DateTime @default(now())
+}
+model Appearance {
+  id String @id @default("default")
+  brandName String @default("Algofort")
+  primary String @default("#285742")
+  accent String @default("#eaf0e4")
+  background String @default("#f5f6f2")
+  logo String?
+  updatedAt DateTime @updatedAt
 }

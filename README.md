@@ -15,7 +15,9 @@ Independent Next.js/PostgreSQL application, stored under `algofort/`. OXGEN's co
 - Reports: separate-currency cash summary, project/client balances, payments, expenses and salaries, with downloaded CSV/PDF exports and date filters.
 - Settings: password and session controls, recent audit history and private JSON business-data export. This export deliberately excludes secrets and account/session data; it is not a full disaster-recovery backup or automatic restore tool.
 
-Financial arithmetic and validation use PostgreSQL Decimal transactions; UI formatting uses two decimal places. Financial records are kept for history rather than hard-deleted. PDFs use a basic paginated Latin-text report; non-Latin characters are substituted in that PDF format (CSV/JSON retain Unicode).
+Financial arithmetic and validation use PostgreSQL Decimal transactions; UI formatting uses two decimal places. Financial records are kept for history rather than hard-deleted. Downloaded PDFs are generated on the server using a custom PDFKit layout: embedded Manrope fonts, brand colours, PNG/JPEG logo, summary cards, separate financial tables, repeated headings and page numbering. They do not use browser printing. The bundled PDF font covers Latin text; CSV/JSON retain Unicode for other scripts. New PDF layout rendering and interaction checks are pending the requested testing session.
+
+Client profile tabs use a short fade/slide transition and respect reduced-motion preferences. Forms use application validation and inline messages instead of browser validation popovers; server validation remains authoritative.
 
 ## Local use
 

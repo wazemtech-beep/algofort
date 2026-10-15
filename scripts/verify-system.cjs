@@ -8,6 +8,7 @@ const db = new PrismaClient();
 const base = 'http://localhost:3111';
 const tag = 'verify-' + randomUUID();
 let ownerId, clientId, employeeId, projectId, salaryId, credentialId, server, checks = 0, cookie = '';
+let fileId, priorAppearance; const directoryIds = []; const projectIds = [];
 function check(name, condition) { assert.ok(condition, name); checks++; console.log('PASS ' + name); }
 async function call(path, body, credential = cookie) { const r = await fetch(base + path, { method: body ? 'POST' : 'GET', headers: { Origin: base, ...(body ? { 'Content-Type': 'application/json' } : {}), ...(credential ? { Cookie: credential } : {}) }, ...(body ? { body: JSON.stringify(body) } : {}), redirect: 'manual', signal: AbortSignal.timeout(30000) }); return { response: r, body: r.headers.get('content-type')?.includes('application/json') ? await r.json() : null }; }
 async function save(body) { const result = await call('/api/workspace', body); assert.equal(result.response.status, 200, result.body?.error); return result.body.result; }
@@ -20,7 +21,12 @@ async function save(body) { const result = await call('/api/workspace', body); a
   check('exports reject unauthenticated requests', (await call('/api/export', null, '')).response.status === 401);
   const login = await call('/api/auth', { action: 'login', email, password }, ''); check('owner login succeeds', login.response.status === 200); cookie = login.response.headers.get('set-cookie').split(';')[0];
   const foreign = await fetch(base + '/api/workspace', { method: 'POST', headers: { Origin: 'https://other.example', Cookie: cookie, 'Content-Type': 'application/json' }, body: '{}' }); check('cross-origin mutations rejected', foreign.status === 403);
-  const client = await save({ action: 'client', name: tag, email: 'client@example.invalid', phone: '03000000000' }); clientId = client.id;
+  const client = await save({ action: 'client', name: tag, email: 'client@example.invalid', phone: '03000000000', website: 'example.invalid' }); clientId = client.id;
+  check('client website normalizes bare domains', client.website === 'https://example.invalid/');
+  check('unsafe website schemes rejected', (await call('/api/workspace', { action:'client', name:tag, website:'javascript:alert(1)' })).response.status === 400);
+  const bank = await save({action:'directory',kind:'BANK',name:tag+' Bank'}); directoryIds.push(bank.id);
+  const hosting = await save({action:'directory',kind:'HOSTING',name:tag+' Hosting',url:'hosting.example.invalid'}); directoryIds.push(hosting.id);
+  check('hosting and bank directories persist without duplicate names', (await save({action:'directory',kind:'HOSTING',name:(tag+' Hosting').toUpperCase()})).id === hosting.id);
   const project = await save({ action: 'project', name: tag, clientId, agreedAmount: '1000.00', currency: 'USD', source: 'UPWORK', status: 'ACTIVE', deadline: '2026-12-31' }); projectId = project.id; check('client and project save durably', !!projectId);
   check('invalid calendar deadline rejected', (await call('/api/workspace', { action: 'project', id: projectId, name: tag, clientId, agreedAmount: '1000', currency: 'USD', source: 'UPWORK', deadline: '2026-02-30' })).response.status === 400);
   const paymentBody = { action: 'payment', projectId, amount: '300.00', platformFee: '30.00', paidAt: '2026-10-14', method: 'UPWORK', idempotencyKey: randomUUID() };
@@ -31,7 +37,27 @@ async function save(body) { const result = await call('/api/workspace', body); a
   const excessive = await call('/api/workspace', { ...paymentBody, amount: '800', idempotencyKey: randomUUID() }); check('overpayment rejected', excessive.response.status === 400);
   const concurrent = await Promise.all([call('/api/workspace', { ...paymentBody, amount: '500', idempotencyKey: randomUUID() }), call('/api/workspace', { ...paymentBody, amount: '500', idempotencyKey: randomUUID() })]); check('concurrent payments serialize against balance', concurrent.filter(r => r.response.status === 200).length === 1 && concurrent.filter(r => r.response.status === 400).length === 1);
   await save({ action: 'voidPayment', id: payment.id, reason: 'Isolated test correction' }); check('voided payment remains in audit ledger', (await db.payment.findUnique({ where: { id: payment.id } })).voidedAt !== null);
-  const staff = await save({ action: 'employee', name: tag, role: 'Designer', monthlySalary: '2000', currency: 'USD' }); employeeId = staff.id;
+  const closePayment = await save({...paymentBody,amount:'500',platformFee:'0',idempotencyKey:randomUUID()});
+  check('full payment financially closes project without completing its work', (await db.project.findUnique({where:{id:projectId}})).closedAt !== null && (await db.project.findUnique({where:{id:projectId}})).status === 'ACTIVE');
+  check('closed projects reject further payments', (await call('/api/workspace',{...paymentBody,amount:'1',platformFee:'0',idempotencyKey:randomUUID()})).response.status===400);
+  check('fully paid projects cannot be casually cancelled', (await call('/api/workspace',{action:'project',id:projectId,name:tag,clientId,agreedAmount:'1000',currency:'USD',source:'UPWORK',status:'CANCELLED'})).response.status===400);
+  await save({action:'voidPayment',id:closePayment.id,reason:'Reopen verification balance'});
+  check('payment correction reopens financial balance', (await db.project.findUnique({where:{id:projectId}})).closedAt===null);
+  const draft = await save({action:'project',name:tag+' Access',clientId,agreedAmount:'5,000.00',currency:'USD',source:'DIRECT',quickAccess:[{category:'HOSTING',hostingCompanyId:hosting.id,label:'Hosting',secret:'quick-secret'},{category:'FTP',label:'FTP',host:'ftp.example.invalid',port:'21',secret:'ftp-secret'}]});projectIds.push(draft.id);
+  check('formatted amounts and atomic project access save together',draft.agreedAmount==='5000'&&await db.credential.count({where:{projectId:draft.id}})===2);
+  check('access URL automatically uses client website',(await db.credential.findFirst({where:{projectId:draft.id}})).url===client.website);
+  const failedDraft = await call('/api/workspace',{action:'project',name:tag+' Invalid',clientId,agreedAmount:'50',currency:'USD',source:'DIRECT',quickAccess:[{category:'SSH',secret:'key',host:'server',port:'99999'}]});
+  check('invalid quick access rolls back entire project',failedDraft.response.status===400&&await db.project.count({where:{name:tag+' Invalid'}})===0);
+  const form=new FormData();form.set('file',new Blob([Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+j8l8AAAAASUVORK5CYII=','base64')],{type:'image/png'}),'test-cnic.png');
+  const uploaded=await fetch(base+'/api/files',{method:'POST',headers:{Origin:base,Cookie:cookie},body:form});const upload=await uploaded.json();fileId=upload.id;
+  check('CNIC upload saves encrypted private file',uploaded.ok&&(await db.privateFile.findUnique({where:{id:fileId}})).encryptedData.startsWith('v1:'));
+  check('CNIC download rejects unauthenticated access',(await fetch(base+'/api/files?id='+fileId)).status===401);
+  check('CNIC download is protected and uncached',(await fetch(base+'/api/files?id='+fileId,{headers:{Cookie:cookie}})).headers.get('cache-control').includes('no-store'));
+  const employeeBody={action:'employee',name:tag,role:'Designer',monthlySalary:'2,000.00',currency:'USD',email:'staff@example.invalid',phone:'03000000000',address:'Verification only',fatherName:'Test Parent',cnic:'12345-1234567-1',cnicAttachmentId:fileId,joiningDate:'2026-10-14',employmentType:'CONTRACT',contractStart:'2026-10-14',contractEnd:'2027-10-14',bankId:bank.id,accountTitle:tag,accountNumber:'123456789'};
+  check('employee CNIC attachment required',(await call('/api/workspace',{...employeeBody,cnicAttachmentId:''})).response.status===400);
+  check('contract date order validated',(await call('/api/workspace',{...employeeBody,contractEnd:'2025-10-14'})).response.status===400);
+  const staff = await save(employeeBody); employeeId = staff.id;
+  check('employee employment and bank details persist',staff.bankId===bank.id&&staff.employmentType==='CONTRACT'&&staff.cnic==='1234512345671');
   const salary = await save({ action: 'salaryMonth', employeeId, month: '2026-10' }); salaryId = salary.id;
   await save({ action: 'salaryMonth', employeeId, month: '2026-10' }); check('salary month retry keeps one obligation', await db.salaryEntry.count({ where: { employeeId } }) === 1);
   const advance = { action: 'salaryPayment', salaryEntryId: salaryId, amount: '500', isAdvance: true, paidAt: '2026-10-14', idempotencyKey: randomUUID() }; await save(advance); await save(advance); check('salary advance deduplicated', await db.salaryPayment.count({ where: { salaryEntryId: salaryId } }) === 1);
@@ -42,9 +68,14 @@ async function save(body) { const result = await call('/api/workspace', body); a
   const snapshot = await call('/api/workspace'); check('workspace never sends encrypted or plaintext secrets', !JSON.stringify(snapshot.body).includes('isolated-secret-value') && !JSON.stringify(snapshot.body).includes('encryptedSecret'));
   check('secret reveal rejects incorrect owner password', (await call('/api/workspace', { action: 'revealCredential', id: credentialId, password: 'incorrect' })).response.status === 400);
   check('secret reveal succeeds after password check', (await save({ action: 'revealCredential', id: credentialId, password })).secret === 'isolated-secret-value');
-  const csv = await fetch(base + '/api/export?format=csv&currency=USD', { headers: { Cookie: cookie } }); check('CSV export includes project/expense/salary data', csv.ok && (await csv.text()).includes(tag));
+  const csv = await fetch(base + '/api/export?format=csv&currency=USD', { headers: { Cookie: cookie } }); const csvText=await csv.text(); check('CSV export includes project/expense/salary data', csv.ok && csvText.includes(tag));check('report exports omit net cash', !/net cash|in.hand cash/i.test(csvText));
   const pdf = await fetch(base + '/api/export?format=pdf&currency=USD', { headers: { Cookie: cookie } }); check('PDF export has real PDF signature', pdf.ok && pdf.headers.get('content-type') === 'application/pdf' && (await pdf.text()).startsWith('%PDF-'));
   const backup = await call('/api/export?format=backup'); check('private backup excludes all secrets and auth data', backup.response.ok && !JSON.stringify(backup.body).includes('encryptedSecret') && !JSON.stringify(backup.body).includes('passwordHash'));
+  check('invalid appearance colours rejected',(await call('/api/workspace',{action:'appearance',brandName:tag,primary:'red',accent:'#eeeeee',background:'#ffffff'})).response.status===400);
+  priorAppearance=await db.appearance.findUnique({where:{id:'default'}});
+  await save({action:'appearance',brandName:tag,primary:'#245a7a',accent:'#e6f1f8',background:'#f2f6f9',logo:''});
+  check('brand name and colours persist in workspace',(await call('/api/workspace')).body.appearance.primary==='#245a7a'&&(await db.appearance.findUnique({where:{id:'default'}})).brandName===tag);
+  if(priorAppearance)await db.appearance.update({where:{id:'default'},data:priorAppearance});else await db.appearance.delete({where:{id:'default'}});
   check('reversed export date range rejected', (await call('/api/export?format=csv&from=2026-12-01&to=2026-01-01')).response.status === 400);
   const otherCurrency = await fetch(base + '/api/export?format=csv&currency=PKR', { headers: { Cookie: cookie } }); check('different currency report excludes USD fixture', !(await otherCurrency.text()).includes(tag));
   const changed = await call('/api/auth', { action: 'password', currentPassword: password, newPassword: password + '-new' }); check('password change succeeds', changed.response.ok);
@@ -66,10 +97,14 @@ async function save(body) { const result = await call('/api/workspace', body); a
   console.log(JSON.stringify({ passed: checks, failed: 0, externalMessagesSent: 0 }));
 })().catch(e => { console.error('FAIL ' + e.message); process.exitCode = 1; }).finally(async () => {
   server?.kill();
+  if((await db.appearance.findUnique({where:{id:'default'}}))?.brandName===tag){if(priorAppearance)await db.appearance.update({where:{id:'default'},data:priorAppearance});else await db.appearance.delete({where:{id:'default'}});}
   if (credentialId) await db.credential.deleteMany({ where: { id: credentialId } });
   if (salaryId) { await db.salaryPayment.deleteMany({ where: { salaryEntryId: salaryId } }); await db.salaryEntry.deleteMany({ where: { id: salaryId } }); }
   if (employeeId) await db.employee.deleteMany({ where: { id: employeeId } });
   if (projectId) { await db.payment.deleteMany({ where: { projectId } }); await db.project.deleteMany({ where: { id: projectId } }); }
+  await db.credential.deleteMany({where:{projectId:{in:projectIds}}});await db.project.deleteMany({where:{id:{in:projectIds}}});
+  await db.directoryEntry.deleteMany({where:{id:{in:directoryIds}}});
+  if(fileId)await db.privateFile.deleteMany({where:{id:fileId}});
   if (clientId) await db.client.deleteMany({ where: { id: clientId } });
   await db.expense.deleteMany({ where: { description: tag } });
   if (ownerId) { await db.auditEntry.deleteMany({ where: { actorId: ownerId } }); await db.owner.deleteMany({ where: { id: ownerId } }); }
